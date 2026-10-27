@@ -1,0 +1,33 @@
+{
+  "name": "atmega8535-dtcombo-simulator",
+  "version": "1.0.0",
+  "description": "DT-COMBO AVR-51 Starter Kit Simulator with ATmega8535, Microchip Studio C Editor, and ProgISP",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "client": "vite",
+    "server": "node server/index.cjs",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "avr8js": "^0.19.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "lucide-react": "^1.16.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.9",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0"
+  }
+}
