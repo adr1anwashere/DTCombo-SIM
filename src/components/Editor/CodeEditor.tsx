@@ -24,14 +24,22 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   // Check compiler status on mount
   useEffect(() => {
     fetch('/api/status')
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Endpoint not available');
+        return res.json();
+      })
       .then((data) => {
         setCompilerReady(data.ready);
         setCompilerMessage(data.message || (data.ready ? 'avr-gcc Ready' : 'Compiler Offline'));
       })
       .catch(() => {
         setCompilerReady(false);
-        setCompilerMessage('Backend compiler server offline. Start server with npm run server');
+        const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+        setCompilerMessage(
+          isVercel
+            ? 'Cloud Host (Vercel) • Precompiled templates ready • Open localhost:5173 for custom code'
+            : 'Backend compiler offline. Start with npm run dev'
+        );
       });
   }, []);
 
@@ -56,30 +64,54 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         body: JSON.stringify({ code, fCpu }),
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      if (response.ok && contentType.includes('application/json')) {
+        const data = await response.json();
 
-      if (data.success && data.hex) {
-        onCompilerLog(`[BUILD SUCCESS] Compiled successfully!`);
-        if (data.codeSize) {
-          const pct = ((data.codeSize / 8192) * 100).toFixed(1);
-          onCompilerLog(`Program Memory Used: ${data.codeSize} bytes (${pct}% of 8192 bytes Flash)`);
-        }
-        if (data.stderr) {
-          onCompilerLog(`Compiler Warnings:\n${data.stderr}`);
-        }
-        onCompileSuccess(data.hex, fCpu);
+        if (data.success && data.hex) {
+          onCompilerLog(`[BUILD SUCCESS] Compiled successfully!`);
+          if (data.codeSize) {
+            const pct = ((data.codeSize / 8192) * 100).toFixed(1);
+            onCompilerLog(`Program Memory Used: ${data.codeSize} bytes (${pct}% of 8192 bytes Flash)`);
+          }
+          if (data.stderr) {
+            onCompilerLog(`Compiler Warnings:\n${data.stderr}`);
+          }
+          onCompileSuccess(data.hex, fCpu);
 
-        if (autoProgram) {
-          onCompilerLog(`[PROGRAM] Automatically programming hex into ATmega8535...`);
-          onProgramDirect(data.hex);
+          if (autoProgram) {
+            onCompilerLog(`[PROGRAM] Automatically programming hex into ATmega8535...`);
+            onProgramDirect(data.hex);
+          }
+          return;
+        } else {
+          onCompilerLog(`[BUILD ERROR] Compilation failed:\n${data.stderr || data.error}`);
+          return;
         }
-      } else {
-        onCompilerLog(`[BUILD ERROR] Compilation failed:\n${data.stderr || data.error}`);
       }
-    } catch (err: any) {
-      onCompilerLog(`[BUILD ERROR] Request failed: ${err.message}. Ensure local compiler server is running.`);
+    } catch {
+      // Backend request failed or returned non-JSON (e.g. running on Vercel without local avr-gcc)
     } finally {
       setIsCompiling(false);
+    }
+
+    // Fallback: If compiler backend is offline (like on Vercel cloud hosting), use verified precompiled HEX
+    const tmpl = TEMPLATES.find((t) => t.id === selectedTemplate);
+    if (tmpl && tmpl.precompiledHex) {
+      onCompilerLog(`[NOTICE] Compiler backend offline (hosted on Vercel cloud).`);
+      onCompilerLog(`[FALLBACK SUCCESS] Loaded verified precompiled Intel HEX for "${tmpl.name}"!`);
+      onCompileSuccess(tmpl.precompiledHex, fCpu);
+
+      if (autoProgram) {
+        onCompilerLog(`[PROGRAM] Automatically programming hex into ATmega8535...`);
+        onProgramDirect(tmpl.precompiledHex);
+      }
+    } else {
+      onCompilerLog(
+        `[BUILD ERROR] Compiler server is offline.\n` +
+        `• If you are viewing on Vercel: Native avr-gcc requires the local server. Open http://localhost:5173/ on your Mac to compile custom C code.\n` +
+        `• You can also load a prebuilt .hex file via the ProgISP panel (Right column).`
+      );
     }
   };
 

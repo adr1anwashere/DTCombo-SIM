@@ -126,7 +126,10 @@ export const App: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: TEMPLATES[0].code, fCpu: 1000000 }),
     })
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Compiler offline');
+        return res.json();
+      })
       .then((data) => {
         if (data.success && data.hex) {
           setCurrentHex(data.hex);
@@ -134,7 +137,13 @@ export const App: React.FC = () => {
           mcu.loadFlash(bytesToWords(p.data));
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (TEMPLATES[0].precompiledHex) {
+          setCurrentHex(TEMPLATES[0].precompiledHex);
+          const p = parseHex(TEMPLATES[0].precompiledHex);
+          mcu.loadFlash(bytesToWords(p.data));
+        }
+      });
   }, [mcu]);
 
   const handleRun = () => {
