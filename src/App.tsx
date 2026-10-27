@@ -60,7 +60,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     const handleLcdPins = () => {
       const wiring = mcu.wiring;
-      if (wiring.lcdPort === 'CUSTOM' || wiring.lcdPort === 'NONE') return;
+      if (wiring.lcdPort === 'CUSTOM') return;
 
       const portAddr = IO_ADDR[`PORT${wiring.lcdPort}` as keyof typeof IO_ADDR];
       const portVal = mcu.cpu.data[portAddr];
@@ -79,46 +79,59 @@ export const App: React.FC = () => {
     const prevHookC = mcu.cpu.writeHooks[IO_ADDR.PORTC];
     const prevHookD = mcu.cpu.writeHooks[IO_ADDR.PORTD];
 
-    mcu.cpu.writeHooks[IO_ADDR.PORTA] = (val, old, addr) => {
+    mcu.cpu.writeHooks[IO_ADDR.PORTA] = (val, old, addr, mask) => {
       mcu.cpu.data[addr] = val;
       if (mcu.wiring.lcdPort === 'A') handleLcdPins();
-      return prevHookA ? prevHookA(val, old, addr) : true;
+      return prevHookA ? prevHookA(val, old, addr, mask) : true;
     };
-    mcu.cpu.writeHooks[IO_ADDR.PORTB] = (val, old, addr) => {
+    mcu.cpu.writeHooks[IO_ADDR.PORTB] = (val, old, addr, mask) => {
       mcu.cpu.data[addr] = val;
       if (mcu.wiring.lcdPort === 'B') handleLcdPins();
-      return prevHookB ? prevHookB(val, old, addr) : true;
+      return prevHookB ? prevHookB(val, old, addr, mask) : true;
     };
-    mcu.cpu.writeHooks[IO_ADDR.PORTC] = (val, old, addr) => {
+    mcu.cpu.writeHooks[IO_ADDR.PORTC] = (val, old, addr, mask) => {
       mcu.cpu.data[addr] = val;
       if (mcu.wiring.lcdPort === 'C') handleLcdPins();
-      return prevHookC ? prevHookC(val, old, addr) : true;
+      return prevHookC ? prevHookC(val, old, addr, mask) : true;
     };
-    mcu.cpu.writeHooks[IO_ADDR.PORTD] = (val, old, addr) => {
+    mcu.cpu.writeHooks[IO_ADDR.PORTD] = (val, old, addr, mask) => {
       mcu.cpu.data[addr] = val;
       if (mcu.wiring.lcdPort === 'D') handleLcdPins();
-      return prevHookD ? prevHookD(val, old, addr) : true;
+      return prevHookD ? prevHookD(val, old, addr, mask) : true;
     };
   }, [mcu, lcd]);
 
-  // Initial compile of starter Blink LED code
+  const DEFAULT_INITIAL_HEX = `:1000000014C01BC01AC019C018C017C016C015C034
+:1000100014C013C012C011C010C00FC00EC00DC05C
+:100020000CC00BC00AC009C008C011241FBECFE518
+:10003000D2E0DEBFCDBF02D018C0E2CF8FEFF7BBBF
+:100040008FEFF8BB2FEF84E091E0215080409040D5
+:10005000E1F700C000001BB82FEF84E091E02150CD
+:1000600080409040E1F700C00000F0CFF894FFCF8D
+:00000001FF`;
+
+  // Initial load of starter code into flash memory
   useEffect(() => {
+    setCurrentHex(DEFAULT_INITIAL_HEX);
+    const parsed = parseHex(DEFAULT_INITIAL_HEX);
+    const words = bytesToWords(parsed.data);
+    mcu.loadFlash(words);
+    setCompilerLogs((prev) => [
+      ...prev,
+      'System Ready: Initialized ATmega8535 flash with starter demo.',
+    ]);
+
     fetch('/api/compile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: TEMPLATES[0].code, fCpu: 4000000 }),
+      body: JSON.stringify({ code: TEMPLATES[0].code, fCpu: 1000000 }),
     })
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.hex) {
           setCurrentHex(data.hex);
-          const parsed = parseHex(data.hex);
-          const words = bytesToWords(parsed.data);
-          mcu.loadFlash(words);
-          setCompilerLogs((prev) => [
-            ...prev,
-            'Loaded and programmed default Blink LED practicum demo.',
-          ]);
+          const p = parseHex(data.hex);
+          mcu.loadFlash(bytesToWords(p.data));
         }
       })
       .catch(() => {});
